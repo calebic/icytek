@@ -114,17 +114,28 @@ local function installController()
   local category = promptLine("Category (Doors/Lights/Machines/etc): ", "")
   local admin = promptLine("Admin Only? (y/n): ", "n")
   local mainframeId = tonumber(promptLine("Mainframe ID [18]: ", "18"))
-  local pair = promptLine("Pairing Code: ", "")
-  while pair == "" do
-    pair = promptLine("Pairing Code (required): ", "")
+  local function readSide(label, default)
+    local valid = { back = true, bottom = true, top = true, right = true, left = true, front = true }
+    while true do
+      local v = promptLine(label .. " [" .. default .. "]: ", default):lower()
+      if valid[v] then
+        return v
+      end
+    end
   end
+  local outputSide = readSide("Output Side", "back")
+  local inputSide
+  repeat
+    inputSide = readSide("Input Side", "front")
+  until inputSide ~= outputSide
   local cfg = {
     id = os.getComputerID(),
     name = name,
     category = category,
     adminOnly = (admin:lower() == "y" or admin:lower() == "yes"),
     mainframeId = mainframeId,
-    pair = pair
+    outputSide = outputSide,
+    inputSide = inputSide
   }
   writeConfig("controller.cfg", cfg)
   return true
