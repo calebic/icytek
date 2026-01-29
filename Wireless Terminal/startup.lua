@@ -485,29 +485,60 @@ local function activateSelection()
   end
 end
 
--- UI loop
-refreshControllers()
+local function updateControllerCache(c)
+  if not c or not c.id then return end
+  if c.adminOnly and not isAdmin then
+    for i = #controllerCache, 1, -1 do
+      if controllerCache[i].id == c.id then
+        table.remove(controllerCache, i)
+      end
+    end
+    return
+  end
+  for i = 1, #controllerCache do
+    if controllerCache[i].id == c.id then
+      controllerCache[i] = c
+      return
+    end
+  end
+  table.insert(controllerCache, c)
+end
 
-while true do
-  drawUI()
-  local _, key = os.pullEvent("key")
-  if key == keys.a then
-    currentTab = currentTab - 1
-    if currentTab < 1 then currentTab = #tabs end
-    selection = 1
-    ctrlPage = "root"
-  elseif key == keys.d then
-    currentTab = currentTab + 1
-    if currentTab > #tabs then currentTab = 1 end
-    selection = 1
-    ctrlPage = "root"
-  elseif key == keys.w then
-    moveSelection(-1)
-  elseif key == keys.s then
-    moveSelection(1)
-  elseif key == keys.enter or key == keys.numPadEnter then
-    activateSelection()
-  elseif key == keys.r then
-    refreshControllers()
+local function listener()
+  while true do
+    local _, msg = rednet.receive()
+    if type(msg) == "table" and msg.type == "controller_status_update" then
+      updateControllerCache(msg)
+      drawUI()
+    end
   end
 end
+
+local function inputLoop()
+  refreshControllers()
+  while true do
+    drawUI()
+    local _, key = os.pullEvent("key")
+    if key == keys.a then
+      currentTab = currentTab - 1
+      if currentTab < 1 then currentTab = #tabs end
+      selection = 1
+      ctrlPage = "root"
+    elseif key == keys.d then
+      currentTab = currentTab + 1
+      if currentTab > #tabs then currentTab = 1 end
+      selection = 1
+      ctrlPage = "root"
+    elseif key == keys.w then
+      moveSelection(-1)
+    elseif key == keys.s then
+      moveSelection(1)
+    elseif key == keys.enter or key == keys.numPadEnter then
+      activateSelection()
+    elseif key == keys.r then
+      refreshControllers()
+    end
+  end
+end
+
+parallel.waitForAny(listener, inputLoop)
