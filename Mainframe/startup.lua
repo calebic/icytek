@@ -166,6 +166,18 @@ local function saveControllers()
   f.close()
 end
 
+local function broadcastControllerUpdate(c)
+  if not c then return end
+  rednet.broadcast({
+    type = "controller_status_update",
+    id = c.id,
+    name = c.name,
+    category = c.category,
+    adminOnly = c.adminOnly,
+    active = c.active
+  })
+end
+
 local function loadControllers()
   if fs.exists(CONTROLLERS_FILE) then
     local f = fs.open(CONTROLLERS_FILE, "r")
@@ -186,6 +198,7 @@ local function upsertController(c)
   end
   controllers[c.id].lastSeen = os.date("%H:%M:%S")
   saveControllers()
+  broadcastControllerUpdate(controllers[c.id])
 end
 
 local function requestControllerStatus()
@@ -328,6 +341,7 @@ local function getMenuItems()
             saveControllers()
             rednet.send(c.id, { type = "controller_set", state = c.active })
             logLine("Toggle sent to " .. c.name)
+            broadcastControllerUpdate(c)
           end
         }
           if c.adminOnly then
@@ -517,6 +531,7 @@ local function handleTable(id, msg)
       saveControllers()
       rednet.send(target.id, { type = "controller_toggle" })
       logLine("Toggle sent: " .. target.name)
+      broadcastControllerUpdate(target)
       rednet.send(id, { type = "ok", message = "Command sent" })
     else
       rednet.send(id, { type = "error", reason = "Controller not found" })
