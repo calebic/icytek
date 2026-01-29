@@ -22,7 +22,8 @@ local STATE_FILE = "state.txt"
 local VERSION_FILE = "controller_version.txt"
 local DEFAULT_VERSION = "0.0.0.0"
 local DEFAULT_MAINFRAME_ID = nil
-local REDSTONE_SIDE = "back"
+local DEFAULT_OUTPUT_SIDE = "back"
+local DEFAULT_INPUT_SIDE = "front"
 
 local function readVersion()
   if fs.exists(VERSION_FILE) then
@@ -125,12 +126,33 @@ local function setupWizard()
     local m = trim(read())
     mainframeId = tonumber(m)
   end
+  local validSides = { back = true, bottom = true, top = true, right = true, left = true, front = true }
+  local function readSide(label, default)
+    while true do
+      write(label .. " [" .. default .. "]: ")
+      local s = trim(read()):lower()
+      if s == "" then s = default end
+      if validSides[s] then
+        return s
+      end
+    end
+  end
+  local outputSide = readSide("Output Side", DEFAULT_OUTPUT_SIDE)
+  local inputSide
+  while true do
+    inputSide = readSide("Input Side", DEFAULT_INPUT_SIDE)
+    if inputSide ~= outputSide then
+      break
+    end
+  end
   local cfg = {
     id = os.getComputerID(),
     name = name,
     category = category,
     adminOnly = adminOnly,
-    mainframeId = mainframeId
+    mainframeId = mainframeId,
+    outputSide = outputSide,
+    inputSide = inputSide
   }
   writeConfig(cfg)
   return cfg
@@ -143,8 +165,15 @@ end
 if not cfg.mainframeId then
   cfg.mainframeId = setupWizard().mainframeId
 end
+cfg.outputSide = cfg.outputSide or DEFAULT_OUTPUT_SIDE
+cfg.inputSide = cfg.inputSide or DEFAULT_INPUT_SIDE
+if cfg.outputSide == cfg.inputSide then
+  cfg.inputSide = DEFAULT_INPUT_SIDE
+end
 
 local MAINFRAME_ID = cfg.mainframeId
+local OUTPUT_SIDE = cfg.outputSide
+local INPUT_SIDE = cfg.inputSide
 
 local function readState()
   if fs.exists(STATE_FILE) then
@@ -163,7 +192,8 @@ local function writeState(state)
 end
 
 local active = readState()
-redstone.setOutput(REDSTONE_SIDE, active)
+redstone.setOutput(OUTPUT_SIDE, active)
+local lastInput = redstone.getInput(INPUT_SIDE)
 
 local function register()
   rednet.send(cfg.mainframeId, {
@@ -216,18 +246,27 @@ while true do
   if type(msg) == "table" then
     if msg.type == "controller_set" then
       active = not not msg.state
-      redstone.setOutput(REDSTONE_SIDE, active)
+      redstone.setOutput(OUTPUT_SIDE, active)
       writeState(active)
       sendStatus()
     elseif msg.type == "controller_toggle" then
       active = not active
-      redstone.setOutput(REDSTONE_SIDE, active)
+      redstone.setOutput(OUTPUT_SIDE, active)
       writeState(active)
       sendStatus()
     elseif msg.type == "controller_status_request" then
       sendStatus()
     end
   end
+
+  local inputNow = redstone.getInput(INPUT_SIDE)
+  if inputNow and not lastInput then
+    active = not active
+    redstone.setOutput(OUTPUT_SIDE, active)
+    writeState(active)
+    sendStatus()
+  end
+  lastInput = inputNow
 
   if os.clock() - lastHeartbeat > 30 then
     sendStatus()
